@@ -1,0 +1,44 @@
+Variable,Married couples,Cohabiting couples
+Male,"0.468
+(0.499)","0.497
+(0.500)"
+Female,"0.532
+(0.499)","0.503
+(0.500)"
+Partners are the same race,"0.793
+(0.405)","0.757
+(0.429)"
+Age of older partner,"46.210
+(9.634)","43.252
+(10.953)"
+Age of younger partner,"41.240
+(9.842)","37.691
+(10.492)"
+Age difference between partners,"4.970
+(5.266)","5.561
+(5.701)"
+Education of more educated partner,"15.588
+(2.472)","15.315
+(2.279)"
+Education of less educated partner,"13.708
+(3.055)","13.464
+(2.630)"
+Education difference between partners,"1.880
+(2.294)","1.850
+(2.124)"
+Any dependent children,"0.324
+(0.468)","0.178
+(0.383)"
+Conditional number of dependent children,"1.841
+(1.020)","1.715
+(0.978)"
+Both partners work,"0.776
+(0.417)","0.808
+(0.394)"
+Only 1 partner works,"0.195
+(0.396)","0.162
+(0.369)"
+Neither partner works,"0.029
+(0.168)","0.030
+(0.170)"
+Observations,"16,147","22,132"

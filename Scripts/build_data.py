@@ -3,10 +3,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+# EDS folder
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-INPUT_FILE = BASE_DIR / "Data" / "Intermediate" / "acs_ssc_reduced_v2.pkl"
-OUTPUT_FILE = BASE_DIR / "Data" / "Final" / "acs_ssc_final_v2.pkl"
+# Go up to PYTHON-VENV-DEMO, then into Replication Project
+PROJECT_DATA_DIR = BASE_DIR.parent / "Replication Project" / "Data"
+
+INPUT_FILE = PROJECT_DATA_DIR / "Intermediate" / "acs_ssc_reduced_V2.pkl"
+OUTPUT_FILE = PROJECT_DATA_DIR / "Final" / "acs_ssc_final_v2.pkl"
 
 
 def map_years_education(s: pd.Series) -> pd.Series:
@@ -275,6 +279,9 @@ def main():
     df["r_exp"] = df["age"] - df["r_yrsedu"] - 6
     df["r_exp2"] = df["r_exp"] ** 2
 
+    # Keep full household data before filtering to partnered adults
+    df_full = df.copy()
+
     # Identify same-sex couples using sploc
     df = df[df["sploc"] > 0].copy()
     df = add_spouse_characteristics(df)
@@ -451,57 +458,46 @@ def main():
     )
     df.loc[non_partner, "r_earnstatus"] = 0
 
-    # Dependents / children
-    df["dependent"] = (
-        ((df["age"] <= 18) & (df["momloc"] != 0)) |
-        ((df["age"] <= 18) & (df["poploc"] != 0)) |
-        ((df["age"] <= 23) & (df["momloc"] != 0) & (df["school"] == 2)) |
-        ((df["age"] <= 23) & (df["poploc"] != 0) & (df["school"] == 2)) |
-        ((df["age"] < 17) & (df["momloc"] == 0) & (df["poploc"] == 0) & (df["momloc2"] == 0) & (df["poploc2"] == 0))
+    # -------------------------------------------------
+    # Dependents / children: compute on full household data
+    # -------------------------------------------------
+    df_full["dependent"] = (
+        ((df_full["age"] <= 18) & (df_full["momloc"] != 0)) |
+        ((df_full["age"] <= 18) & (df_full["poploc"] != 0)) |
+        ((df_full["age"] <= 23) & (df_full["momloc"] != 0) & (df_full["school"] == 2)) |
+        ((df_full["age"] <= 23) & (df_full["poploc"] != 0) & (df_full["school"] == 2)) |
+        (
+            (df_full["age"] < 17) &
+            (df_full["momloc"] == 0) &
+            (df_full["poploc"] == 0) &
+            (df_full["momloc2"] == 0) &
+            (df_full["poploc2"] == 0)
+        )
     ).astype(int)
 
-    sscouple_lookup = df[["year", "serial", "pernum", "sscouple_all", "sscoh_all"]].copy()
+    df_full["r_child0_1"] = ((df_full["dependent"] == 1) & (df_full["age"] == 0)).astype(int)
+    df_full["r_child1_5"] = ((df_full["dependent"] == 1) & (df_full["age"].between(1, 5))).astype(int)
+    df_full["r_child6_18"] = ((df_full["dependent"] == 1) & (df_full["age"].between(6, 18))).astype(int)
+    df_full["r_child0_12"] = ((df_full["dependent"] == 1) & (df_full["age"].between(0, 12))).astype(int)
+    df_full["r_child0_16"] = ((df_full["dependent"] == 1) & (df_full["age"].between(0, 16))).astype(int)
+    df_full["r_child0_18"] = ((df_full["dependent"] == 1) & (df_full["age"].between(0, 18))).astype(int)
 
-    mom_lookup = sscouple_lookup.rename(columns={
-        "pernum": "momloc",
-        "sscouple_all": "mom_sscouple_all",
-        "sscoh_all": "mom_sscoh_all"
-    })
-    pop_lookup = sscouple_lookup.rename(columns={
-        "pernum": "poploc",
-        "sscouple_all": "pop_sscouple_all",
-        "sscoh_all": "pop_sscoh_all"
-    })
-
-    df = df.merge(mom_lookup, on=["year", "serial", "momloc"], how="left")
-    df = df.merge(pop_lookup, on=["year", "serial", "poploc"], how="left")
-
-    bad_dep = (
-        ((df["momloc"] != 0) & (df["mom_sscouple_all"].fillna(0) == 0)) |
-        ((df["poploc"] != 0) & (df["pop_sscouple_all"].fillna(0) == 0)) |
-        ((df["momloc"] != 0) & (df["mom_sscoh_all"].fillna(0) == 0)) |
-        ((df["poploc"] != 0) & (df["pop_sscoh_all"].fillna(0) == 0))
+    children_hh = (
+        df_full.groupby(["year", "serial"], as_index=False)
+        .agg(
+            c_children=("dependent", "sum"),
+            c_children0_1=("r_child0_1", "sum"),
+            c_children1_5=("r_child1_5", "sum"),
+            c_children6_18=("r_child6_18", "sum"),
+            c_children0_12=("r_child0_12", "sum"),
+            c_children0_16=("r_child0_16", "sum"),
+            c_children0_18=("r_child0_18", "sum"),
+        )
     )
-    df.loc[bad_dep, "dependent"] = 0
+    children_hh["c_anychildren"] = (children_hh["c_children"] > 0).astype(int)
 
-    df["c_children"] = df.groupby(["year", "serial"])["dependent"].transform("sum")
-    df["c_anychildren"] = (df["c_children"] > 0).astype(int)
-    df["r_child0_1"] = ((df["dependent"] == 1) & (df["age"] == 0)).astype(int)
-    df["r_child1_5"] = ((df["dependent"] == 1) & (df["age"].between(1, 5))).astype(int)
-    df["r_child6_18"] = ((df["dependent"] == 1) & (df["age"].between(6, 18))).astype(int)
-    df["r_child0_12"] = ((df["dependent"] == 1) & (df["age"].between(0, 12))).astype(int)
-    df["r_child0_16"] = ((df["dependent"] == 1) & (df["age"].between(0, 16))).astype(int)
-    df["r_child0_18"] = ((df["dependent"] == 1) & (df["age"].between(0, 18))).astype(int)
-
-    for src, dst in [
-        ("r_child0_1", "c_children0_1"),
-        ("r_child1_5", "c_children1_5"),
-        ("r_child6_18", "c_children6_18"),
-        ("r_child0_12", "c_children0_12"),
-        ("r_child0_16", "c_children0_16"),
-        ("r_child0_18", "c_children0_18"),
-    ]:
-        df[dst] = df.groupby(["year", "serial"])[src].transform("sum")
+    # Merge household-level child counts to couple-level sample
+    df = df.merge(children_hh, on=["year", "serial"], how="left")
 
     # Couple vars
     couple_mask = (
@@ -609,6 +605,8 @@ def main():
 
     print("Final output shape:", df_final.shape)
     print("Share married:", df_final["sscouple_mar"].mean())
+    print("Share with children:", df_final["c_anychildren"].mean())
+    print("Mean children:", df_final["c_children"].mean())
 
     df_final.to_pickle(OUTPUT_FILE)
     print(f"Saved final file to {OUTPUT_FILE}")
